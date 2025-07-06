@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Upload User CSV</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #1a1a2e;
+      color: #f0f0f0;
+      margin: 40px;
+    }
+    form {
+      background: #16213e;
+      padding: 20px;
+      border-radius: 10px;
+    }
+    select, input, button {
+      display: block;
+      margin: 10px 0;
+      padding: 10px;
+      width: 100%;
+      font-size: 14px;
+      border-radius: 5px;
+      border: none;
+    }
+    button {
+      background-color: #0f3460;
+      color: white;
+      cursor: pointer;
+    }
+    a {
+      color: #00adb5;
+    }
+  </style>
+</head>
+<body>
+  <h1>📂 Upload CSV to Create Users</h1>
+  <form method="POST" action="/create-users" enctype="multipart/form-data">
+    <label>Select Server IP:</label>
+    <select name="server_ip" required>
+      {{range $ip, $_ := .}}
+        <option value="{{$ip}}">{{$ip}}</option>
+      {{end}}
+    </select>
+    <label>Choose CSV File (username,password):</label>
+    <input type="file" name="csvfile" accept=".csv" required>
+    <button type="submit">➕ Create Users</button>
+  </form>
+  <br>
+  <a href="/">⬅️ Back to Dashboard</a>
+</body>
+</html>
