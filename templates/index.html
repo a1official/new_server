@@ -1,107 +1,62 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Server Dashboard</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', sans-serif;
-      margin: 0;
-      padding: 0;
-      background: linear-gradient(145deg, #d1d9e6, #f0f4f8);
-      color: #333;
-    }
-    .container {
-      display: flex;
-      flex-direction: row;
-      padding: 20px;
-      gap: 40px;
-    }
-    .form-section, .accounts-section {
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-      padding: 20px;
-      flex: 1;
-    }
-    h2 {
-      color: #2b5876;
-    }
-    input[type="text"], input[type="password"] {
-      width: 90%;
-      padding: 10px;
-      margin-bottom: 12px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-    }
-    button {
-      background: #2b5876;
-      color: white;
-      border: none;
-      padding: 10px 18px;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #1b3c56;
-    }
-    .ip-box {
-      margin-bottom: 16px;
-      padding: 12px;
-      border-left: 4px solid #2b5876;
-      background: #f9f9f9;
-    }
-    .ip-box h3 {
-      margin: 0 0 8px;
-      color: #2b5876;
-    }
-    .ip-box ul {
-      padding-left: 20px;
-    }
-    .nav {
-      background: #2b5876;
-      color: white;
-      padding: 12px 20px;
-      font-size: 20px;
-    }
-  </style>
+    <title>Bulk Account Manager</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #f0f4f8;
+            padding: 20px;
+        }
+        .card {
+            background: #fff;
+            padding: 20px;
+            margin: 10px;
+            border-radius: 8px;
+            box-shadow: 0px 2px 8px rgba(0,0,0,0.1);
+        }
+        .ip {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        .btn {
+            padding: 6px 12px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+    </style>
 </head>
 <body>
-  <div class="nav">📡 Bulk Server Dashboard</div>
-
-  <div class="container">
-    <div class="form-section">
-      <h2>Add Server</h2>
-      <form method="POST" action="/add-ip">
-        <input type="text" name="ip" placeholder="Server IP" required /><br/>
-        <input type="text" name="root_username" placeholder="Root Username" required /><br/>
-        <input type="password" name="root_password" placeholder="Root Password" required /><br/>
-        <button type="submit">➕ Add Server</button>
-      </form>
-
-      <h2 style="margin-top: 40px;">Create Accounts</h2>
-      <form method="GET" action="/upload-csv">
-        <button type="submit">📤 Upload CSV</button>
-      </form>
+    <h1>🌐 Bulk Account Manager</h1>
+    <a href="/upload-csv" class="btn">Upload CSV</a>
+    <h2>Add Server</h2>
+    <form method="POST" action="/add-ip">
+        <input name="ip" placeholder="Server IP" required />
+        <input name="root_username" placeholder="Root Username" required />
+        <input name="root_password" placeholder="Root Password" required />
+        <button type="submit">Add</button>
+    </form>
+    <h2>Registered Servers</h2>
+    {{range $ip, $info := .}}
+    <div class="card">
+        <div class="ip">🖥 {{$ip}}</div>
+        <div><strong>Root:</strong> {{$info.RootUsername}}</div>
+        <div><strong>Accounts:</strong>
+            <ul>
+                {{range $info.Accounts}}
+                    <li>{{.}}</li>
+                {{end}}
+            </ul>
+        </div>
     </div>
-
-    <div class="accounts-section">
-      <h2>🧾 Servers & Accounts</h2>
-      {{ range $ip, $info := . }}
-      <div class="ip-box">
-        <h3>{{ $ip }}</h3>
-        <strong>Accounts:</strong>
-        <ul>
-          {{ range $info.Accounts }}
-          <li>{{ . }}</li>
-          {{ end }}
-        </ul>
-      </div>
-      {{ else }}
-      <p>No servers added yet.</p>
-      {{ end }}
-    </div>
-  </div>
+    {{else}}
+    <p>No IPs registered yet.</p>
+    {{end}}
 </body>
 </html>
