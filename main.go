@@ -65,24 +65,32 @@ func addIPHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func executeRemoteCommand(ip, user, pass, cmd string) error {
+func executeRemoteScript(ip, user, pass, script string) (string, error) {
 	client, err := ssh.Dial("tcp", ip+":22", &ssh.ClientConfig{
 		User:            user,
 		Auth:            []ssh.AuthMethod{ssh.Password(pass)},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 	})
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer client.Close()
 
 	session, err := client.NewSession()
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer session.Close()
 
-	return session.Run(cmd)
+	var output strings.Builder
+	session.Stdout = &output
+	session.Stderr = &output
+
+	err = session.Run("bash -s")
+	if err != nil {
+		return output.String(), err
+	}
+	return output.String(), nil
 }
 
 func uploadCSVHandler(w http.ResponseWriter, r *http.Request) {
@@ -121,58 +129,42 @@ func createUsersHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := ssh.Dial("tcp", ip+":22", &ssh.ClientConfig{
-		User:            server.RootUsername,
-		Auth:            []ssh.AuthMethod{ssh.Password(server.RootPassword)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-	})
-	if err != nil {
-		http.Error(w, "SSH error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer client.Close()
-
 	f, _ := os.Open(path)
 	reader := csv.NewReader(f)
 	reader.Read() // skip header
 
-	var log strings.Builder
-	created := []string{}
+	var script strings.Builder
+	var created []string
+
 	for {
 		record, err := reader.Read()
 		if err == io.EOF {
 			break
 		}
 		if len(record) < 2 {
-			log.WriteString("Invalid row (skipped)\n")
 			continue
 		}
 		username := record[0]
 		password := record[1]
-
-		cmd := fmt.Sprintf(`sudo useradd -m -s /bin/bash -p $(openssl passwd -1 '%s') %s`, password, username)
-		session, err := client.NewSession()
-		if err != nil {
-			log.WriteString(fmt.Sprintf("Session error for %s\n", username))
-			continue
-		}
-		err = session.Run(cmd)
-		if err != nil {
-			log.WriteString(fmt.Sprintf("❌ Failed: %s → %s\n", username, err.Error()))
-		} else {
-			log.WriteString(fmt.Sprintf("✅ Created: %s\n", username))
-			created = append(created, username)
-		}
-		session.Close()
+		script.WriteString(fmt.Sprintf("sudo useradd -m -s /bin/bash %s && echo '%s:%s' | sudo chpasswd\n", username, username, password))
+		created = append(created, username)
 	}
 
+	output, err := executeRemoteScript(ip, server.RootUsername, server.RootPassword, script.String())
+	var logBuilder strings.Builder
+	if err != nil {
+		logBuilder.WriteString("❌ Remote script failed:\n")
+	}
+	logBuilder.WriteString(output)
+
+	// Update created accounts in map
 	s := ipMap[ip]
 	s.Accounts = append(s.Accounts, created...)
 	ipMap[ip] = s
 	saveIPMap()
 
 	tmpl := template.Must(template.ParseFiles("templates/logs.html"))
-	tmpl.Execute(w, log.String())
+	tmpl.Execute(w, logBuilder.String())
 }
 
 func main() {
