@@ -1,3 +1,4 @@
+// ✅ main.go (UPDATED)
 package main
 
 import (
@@ -29,11 +30,10 @@ func loadIPMap() error {
 		return nil
 	}
 	defer file.Close()
-
 	decoder := json.NewDecoder(file)
 	err = decoder.Decode(&ipMap)
 	if err != nil {
-		ipMap = make(map[string]ServerInfo) // fallback to empty map
+		ipMap = make(map[string]ServerInfo)
 	}
 	return err
 }
@@ -46,21 +46,14 @@ func saveIPMap() error {
 	defer file.Close()
 	err = json.NewEncoder(file).Encode(ipMap)
 	if err == nil {
-		file.Sync() // ensure flush
+		file.Sync()
 	}
 	return err
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFiles("templates/index.html")
-	if err != nil {
-		http.Error(w, "Template error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	err = tmpl.Execute(w, ipMap)
-	if err != nil {
-		http.Error(w, "Template exec error: "+err.Error(), http.StatusInternalServerError)
-	}
+	tmpl := template.Must(template.ParseFiles("templates/index.html"))
+	tmpl.Execute(w, ipMap)
 }
 
 func addIPHandler(w http.ResponseWriter, r *http.Request) {
@@ -100,25 +93,25 @@ func executeRemoteScript(ip, user, pass, script string) (string, error) {
 	session.Stdout = &output
 	session.Stderr = &output
 	session.Stdin = strings.NewReader(script)
-
-	err = session.Run("bash -s")
+	err = session.Run("sh -s")
 	return output.String(), err
 }
 
 func uploadCSVHandler(w http.ResponseWriter, r *http.Request) {
-	tmpl, err := template.ParseFiles("templates/upload.html")
-	if err != nil {
-		http.Error(w, "Template error: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	err = tmpl.Execute(w, ipMap)
-	if err != nil {
-		http.Error(w, "Template exec error: "+err.Error(), http.StatusInternalServerError)
-	}
+	tmpl := template.Must(template.ParseFiles("templates/upload.html"))
+	tmpl.Execute(w, ipMap)
 }
 
 func createUsersHandler(w http.ResponseWriter, r *http.Request) {
 	ip := strings.TrimSpace(r.FormValue("server_ip"))
+	server, ok := ipMap[ip]
+	if !ok {
+		http.Error(w, "❌ IP not found in records", http.StatusBadRequest)
+		fmt.Println("Received IP:", ip)
+		fmt.Println("Available IPs:", ipMap)
+		return
+	}
+
 	file, handler, err := r.FormFile("csvfile")
 	if err != nil {
 		http.Error(w, "Error reading file: "+err.Error(), http.StatusInternalServerError)
@@ -134,12 +127,6 @@ func createUsersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	io.Copy(out, file)
 	out.Close()
-
-	server, ok := ipMap[ip]
-	if !ok {
-		http.Error(w, "IP not found in records", http.StatusBadRequest)
-		return
-	}
 
 	f, err := os.Open(path)
 	if err != nil {
@@ -164,14 +151,12 @@ func createUsersHandler(w http.ResponseWriter, r *http.Request) {
 			logBuilder.WriteString(fmt.Sprintf("❌ Skipped invalid row: %v\n", record))
 			continue
 		}
-
 		username := strings.TrimSpace(record[0])
 		password := strings.TrimSpace(record[1])
 		if username == "" || password == "" {
 			logBuilder.WriteString(fmt.Sprintf("❌ Skipped empty fields: %v\n", record))
 			continue
 		}
-
 		safePass := strings.ReplaceAll(password, `'`, `'\''`)
 		script.WriteString(fmt.Sprintf("sudo useradd -m -s /bin/bash %s && echo '%s:%s' | sudo chpasswd\n", username, username, safePass))
 		created = append(created, username)
@@ -193,9 +178,7 @@ func createUsersHandler(w http.ResponseWriter, r *http.Request) {
 	saveIPMap()
 
 	tmpl := template.Must(template.ParseFiles("templates/logs.html"))
-	if err := tmpl.Execute(w, logBuilder.String()); err != nil {
-		http.Error(w, "Log rendering failed: "+err.Error(), http.StatusInternalServerError)
-	}
+	tmpl.Execute(w, logBuilder.String())
 }
 
 func main() {
@@ -208,6 +191,6 @@ func main() {
 	http.HandleFunc("/upload-csv", uploadCSVHandler)
 	http.HandleFunc("/create-users", createUsersHandler)
 
-	fmt.Println("🌐 Server running at http://localhost:8080")
+	fmt.Println(":8080")
 	http.ListenAndServe(":8080", nil)
 }
