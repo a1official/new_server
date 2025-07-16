@@ -1,62 +1,21 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <title>Bulk Account Manager</title>
-    <style>
-        body {
-            font-family: sans-serif;
-            background: #f0f4f8;
-            padding: 20px;
-        }
-        .card {
-            background: #fff;
-            padding: 20px;
-            margin: 10px;
-            border-radius: 8px;
-            box-shadow: 0px 2px 8px rgba(0,0,0,0.1);
-        }
-        .ip {
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
-        ul {
-            margin: 0;
-            padding-left: 20px;
-        }
-        .btn {
-            padding: 6px 12px;
-            background: #007bff;
-            color: white;
-            text-decoration: none;
-            border-radius: 4px;
-        }
-    </style>
-</head>
+<head><title>Bulk Account Manager</title></head>
 <body>
-    <h1>🌐 Bulk Account Manager</h1>
-    <a href="/upload-csv" class="btn">Upload CSV</a>
-    <h2>Add Server</h2>
-    <form method="POST" action="/add-ip">
-        <input name="ip" placeholder="Server IP" required />
-        <input name="root_username" placeholder="Root Username" required />
-        <input name="root_password" placeholder="Root Password" required />
-        <button type="submit">Add</button>
-    </form>
-    <h2>Registered Servers</h2>
-    {{range $ip, $info := .}}
-    <div class="card">
-        <div class="ip">🖥 {{$ip}}</div>
-        <div><strong>Root:</strong> {{$info.RootUsername}}</div>
-        <div><strong>Accounts:</strong>
-            <ul>
-                {{range $info.Accounts}}
-                    <li>{{.}}</li>
-                {{end}}
-            </ul>
-        </div>
-    </div>
-    {{else}}
-    <p>No IPs registered yet.</p>
-    {{end}}
+  <h2>Add New Server</h2>
+  <form method="POST" action="/add-ip">
+    <input type="text" name="ip" placeholder="IP Address" required><br>
+    <input type="text" name="root_username" placeholder="Root Username" required><br>
+    <input type="password" name="root_password" placeholder="Root Password" required><br>
+    <button type="submit">Add IP</button>
+  </form>
+
+  <h3>Saved Servers</h3>
+  <ul>
+    {{ range $ip, $info := . }}
+      <li>{{ $ip }} ({{ len $info.Accounts }} accounts)</li>
+    {{ end }}
+  </ul>
+  <a href="/upload-csv">📤 Upload CSV & Create Users</a>
 </body>
 </html>
