@@ -1,19 +1,19 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <title>Upload CSV</title>
-</head>
+<head><title>Upload CSV</title></head>
 <body>
-    <h1>📤 Upload CSV for User Creation</h1>
-    <form method="POST" action="/create-users" enctype="multipart/form-data">
-        <label>Select Server IP:</label>
-        <select name="server_ip" required>
-            {{range $ip := .}}
-                <option value="{{$ip}}">{{$ip}}</option>
-            {{end}}
-        </select><br><br>
-        <input type="file" name="csvfile" accept=".csv" required><br><br>
-        <button type="submit">Create Users</button>
-    </form>
+  <h2>Upload CSV to Create Accounts</h2>
+  <form method="POST" action="/create-users" enctype="multipart/form-data">
+    <label>Select Server:</label>
+    <select name="server_ip" required>
+      {{ range $ip, $_ := . }}
+        <option value="{{ $ip }}">{{ $ip }}</option>
+      {{ end }}
+    </select><br><br>
+
+    <input type="file" name="csvfile" accept=".csv" required><br><br>
+    <button type="submit">Create Users</button>
+  </form>
+  <a href="/">← Back to Dashboard</a>
 </body>
 </html>
