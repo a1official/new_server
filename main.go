@@ -29,7 +29,13 @@ func loadIPMap() error {
 		return nil
 	}
 	defer file.Close()
-	return json.NewDecoder(file).Decode(&ipMap)
+
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&ipMap)
+	if err != nil {
+		ipMap = make(map[string]ServerInfo) // fallback to empty map
+	}
+	return err
 }
 
 func saveIPMap() error {
@@ -38,7 +44,11 @@ func saveIPMap() error {
 		return err
 	}
 	defer file.Close()
-	return json.NewEncoder(file).Encode(ipMap)
+	err = json.NewEncoder(file).Encode(ipMap)
+	if err == nil {
+		file.Sync() // ensure flush
+	}
+	return err
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -55,11 +65,15 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 
 func addIPHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
-		ip := r.FormValue("ip")
-		rootUser := r.FormValue("root_username")
-		rootPass := r.FormValue("root_password")
+		ip := strings.TrimSpace(r.FormValue("ip"))
+		rootUser := strings.TrimSpace(r.FormValue("root_username"))
+		rootPass := strings.TrimSpace(r.FormValue("root_password"))
 
-		ipMap[ip] = ServerInfo{RootUsername: rootUser, RootPassword: rootPass, Accounts: []string{}}
+		ipMap[ip] = ServerInfo{
+			RootUsername: rootUser,
+			RootPassword: rootPass,
+			Accounts:     []string{},
+		}
 		saveIPMap()
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 	}
@@ -85,13 +99,10 @@ func executeRemoteScript(ip, user, pass, script string) (string, error) {
 	var output strings.Builder
 	session.Stdout = &output
 	session.Stderr = &output
-	session.Stdin = strings.NewReader(script) // ✅ Pass script to stdin
+	session.Stdin = strings.NewReader(script)
 
 	err = session.Run("bash -s")
-	if err != nil {
-		return output.String(), err
-	}
-	return output.String(), nil
+	return output.String(), err
 }
 
 func uploadCSVHandler(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +118,7 @@ func uploadCSVHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func createUsersHandler(w http.ResponseWriter, r *http.Request) {
-	ip := r.FormValue("server_ip")
+	ip := strings.TrimSpace(r.FormValue("server_ip"))
 	file, handler, err := r.FormFile("csvfile")
 	if err != nil {
 		http.Error(w, "Error reading file: "+err.Error(), http.StatusInternalServerError)
@@ -126,16 +137,23 @@ func createUsersHandler(w http.ResponseWriter, r *http.Request) {
 
 	server, ok := ipMap[ip]
 	if !ok {
-		http.Error(w, "IP not found", http.StatusBadRequest)
+		http.Error(w, "IP not found in records", http.StatusBadRequest)
 		return
 	}
 
-	f, _ := os.Open(path)
+	f, err := os.Open(path)
+	if err != nil {
+		http.Error(w, "Failed to open uploaded CSV", http.StatusInternalServerError)
+		return
+	}
+	defer f.Close()
+
 	reader := csv.NewReader(f)
-	reader.Read() // skip header
+	_, _ = reader.Read() // skip header
 
 	var script strings.Builder
 	var created []string
+	var logBuilder strings.Builder
 
 	for {
 		record, err := reader.Read()
@@ -143,29 +161,41 @@ func createUsersHandler(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if len(record) < 2 {
+			logBuilder.WriteString(fmt.Sprintf("❌ Skipped invalid row: %v\n", record))
 			continue
 		}
-		username := record[0]
-		password := record[1]
-		script.WriteString(fmt.Sprintf("sudo useradd -m -s /bin/bash %s && echo '%s:%s' | sudo chpasswd\n", username, username, password))
+
+		username := strings.TrimSpace(record[0])
+		password := strings.TrimSpace(record[1])
+		if username == "" || password == "" {
+			logBuilder.WriteString(fmt.Sprintf("❌ Skipped empty fields: %v\n", record))
+			continue
+		}
+
+		safePass := strings.ReplaceAll(password, `'`, `'\''`)
+		script.WriteString(fmt.Sprintf("sudo useradd -m -s /bin/bash %s && echo '%s:%s' | sudo chpasswd\n", username, username, safePass))
 		created = append(created, username)
 	}
 
+	if len(created) == 0 {
+		logBuilder.WriteString("⚠️ No valid user entries found.\n")
+	}
+
 	output, err := executeRemoteScript(ip, server.RootUsername, server.RootPassword, script.String())
-	var logBuilder strings.Builder
 	if err != nil {
-		logBuilder.WriteString("❌ Remote script failed:\n")
+		logBuilder.WriteString("❌ Remote script execution failed:\n")
 	}
 	logBuilder.WriteString(output)
 
-	// Update created accounts in map
 	s := ipMap[ip]
 	s.Accounts = append(s.Accounts, created...)
 	ipMap[ip] = s
 	saveIPMap()
 
 	tmpl := template.Must(template.ParseFiles("templates/logs.html"))
-	tmpl.Execute(w, logBuilder.String())
+	if err := tmpl.Execute(w, logBuilder.String()); err != nil {
+		http.Error(w, "Log rendering failed: "+err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func main() {
