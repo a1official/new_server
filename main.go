@@ -85,6 +85,7 @@ func executeRemoteScript(ip, user, pass, script string) (string, error) {
 	var output strings.Builder
 	session.Stdout = &output
 	session.Stderr = &output
+	session.Stdin = strings.NewReader(script) // ✅ Pass script to stdin
 
 	err = session.Run("bash -s")
 	if err != nil {
